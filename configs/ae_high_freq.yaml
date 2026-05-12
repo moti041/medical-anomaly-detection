@@ -1,0 +1,44 @@
+# trkr: Human-readable name shown in the tracker UI for comparing runs.
+experiment_name: ae_high_freq
+
+# trkr: high_freq applies a circular high-pass mask before log magnitude.
+spectral_mode: high_freq
+
+# trkr: Input image and spectrum resolution; keep identical across benchmark configs.
+image_size: 256
+
+# trkr: Mini-batch size for autoencoder training and latent extraction.
+batch_size: 32
+
+# trkr: Maximum training epochs; early stopping may finish sooner.
+epochs: 7
+
+# trkr: Adam optimizer learning rate.
+learning_rate: 0.01
+
+# trkr: Size of the autoencoder latent vector used by the downstream GMM.
+latent_dim: 128
+
+# trkr: Inclusive K range for GMM selection by BIC.
+gmm_k_range: [1, 6]
+
+# trkr: Select best_K by elbow on the BIC curve; use bic to force minimal BIC.
+gmm_selection_method: elbow
+
+# trkr: Validation NORMAL percentile used as anomaly threshold.
+threshold_percentile: 92
+
+# trkr: Weight for normalized GMM score in final anomaly score; 0.5 gives equal weight to reconstruction error.
+score_alpha: 0.7
+
+# trkr: AE reconstruction objective and evaluation reconstruction score.
+reconstruction_loss: energy_normalized_mse
+
+# trkr: Reconstruct only the FFT spectrum channel; channel 0 image is context, channel 1 FFT is target.
+reconstruction_target: fft_only
+
+# trkr: Normalized radial cutoff; frequencies with radius <= this value are removed.
+high_freq_cutoff_ratio: 0.4
+
+# trkr: Dataset root; override with --data_dir if needed.
+data_dir: data/chest_xray

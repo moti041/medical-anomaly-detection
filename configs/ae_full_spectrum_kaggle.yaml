@@ -1,0 +1,44 @@
+# trkr: Human-readable name shown in the tracker UI for comparing runs.
+experiment_name: ae_full_spectrum_kaggle
+
+# trkr: full_spectrum uses log(1 + abs(FFT2(image))) with all frequencies kept.
+spectral_mode: full_spectrum
+
+# trkr: Input image and spectrum resolution; keep identical across benchmark configs.
+image_size: 128
+
+# trkr: Mini-batch size for autoencoder training and latent extraction.
+batch_size: 32
+
+# trkr: Maximum training epochs; early stopping may finish sooner.
+epochs: 20
+
+# trkr: Adam optimizer learning rate.
+learning_rate: 0.001
+
+# trkr: Size of the autoencoder latent vector used by the downstream GMM.
+latent_dim: 128
+
+# trkr: Inclusive K range for GMM selection.
+gmm_k_range: [1, 6]
+
+# trkr: Select best_K by elbow on the BIC curve; use bic to force minimal BIC.
+gmm_selection_method: elbow
+
+# trkr: Validation NORMAL percentile used as anomaly threshold.
+threshold_percentile: 98
+
+# trkr: Weight for normalized GMM score in final anomaly score.
+score_alpha: 0.8
+
+# trkr: AE reconstruction objective and evaluation reconstruction score.
+reconstruction_loss: energy_normalized_mse
+
+# trkr: Reconstruct only the FFT spectrum channel; channel 0 image is context, channel 1 FFT is target.
+reconstruction_target: fft_only
+
+# trkr: High-pass cutoff for high_freq mode; logged here even though full_spectrum ignores it.
+high_freq_cutoff_ratio: 0.25
+
+# trkr: Dataset root for the Kaggle copy downloaded next to the original data.
+data_dir: data/chest_xray_kaggle
