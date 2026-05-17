@@ -1,0 +1,152 @@
+{
+  "activation": "leaky_relu",
+  "leaky_relu_slope": 0.1,
+  "use_pca": false,
+  "pca_n_components": 0.8,
+  "actual_pca_components": null,
+  "explained_variance_ratio_sum": null,
+  "test_subset": "bacteria_only",
+  "best_K": 4,
+  "min_bic_K": 1,
+  "elbow_K": 3,
+  "gmm_selection_method": "elbow",
+  "score_alpha": 0.5,
+  "reconstruction_loss": "energy_normalized_mse",
+  "reconstruction_target": "fft_only",
+  "threshold": 0.3633788434354912,
+  "mean_gmm_score": -442.78754180098286,
+  "mean_reconstruction_error": 0.06700839384679494,
+  "mean_final_score": 0.7998301840441298,
+  "score_normalization": {
+    "gmm_score_min": -525.3057857456583,
+    "gmm_score_max": -434.6389749105485,
+    "reconstruction_error_min": 0.05057479441165924,
+    "reconstruction_error_max": 0.07440769672393799
+  },
+  "roc_auc": 0.9561551813529903,
+  "pr_auc": 0.9711888321171552,
+  "precision": 0.8969072164948454,
+  "recall": 0.9354838709677419,
+  "f1": 0.9157894736842105,
+  "specificity": 0.8113207547169812,
+  "confusion_matrix": [
+    [
+      129,
+      30
+    ],
+    [
+      18,
+      261
+    ]
+  ],
+  "confusion_matrix_percent": [
+    [
+      81.13,
+      18.87
+    ],
+    [
+      6.45,
+      93.55
+    ]
+  ],
+  "tn": 129,
+  "fp": 30,
+  "fn": 18,
+  "tp": 261,
+  "all_pneumonia": {
+    "roc_auc": 0.9484217950978664,
+    "pr_auc": 0.9778042810453466,
+    "precision": 0.9299065420560748,
+    "recall": 0.9299065420560748,
+    "f1": 0.9299065420560748,
+    "specificity": 0.8113207547169812,
+    "confusion_matrix": [
+      [
+        129,
+        30
+      ],
+      [
+        30,
+        398
+      ]
+    ],
+    "confusion_matrix_percent": [
+      [
+        81.13,
+        18.87
+      ],
+      [
+        7.01,
+        92.99
+      ]
+    ],
+    "tn": 129,
+    "fp": 30,
+    "fn": 30,
+    "tp": 398
+  },
+  "virus_only": {
+    "roc_auc": 0.9339411590899498,
+    "pr_auc": 0.9294214818177293,
+    "precision": 0.8203592814371258,
+    "recall": 0.9194630872483222,
+    "f1": 0.8670886075949367,
+    "specificity": 0.8113207547169812,
+    "confusion_matrix": [
+      [
+        129,
+        30
+      ],
+      [
+        12,
+        137
+      ]
+    ],
+    "confusion_matrix_percent": [
+      [
+        81.13,
+        18.87
+      ],
+      [
+        8.05,
+        91.95
+      ]
+    ],
+    "tn": 129,
+    "fp": 30,
+    "fn": 12,
+    "tp": 137
+  },
+  "bacteria_only": {
+    "roc_auc": 0.9561551813529903,
+    "pr_auc": 0.9711888321171552,
+    "precision": 0.8969072164948454,
+    "recall": 0.9354838709677419,
+    "f1": 0.9157894736842105,
+    "specificity": 0.8113207547169812,
+    "confusion_matrix": [
+      [
+        129,
+        30
+      ],
+      [
+        18,
+        261
+      ]
+    ],
+    "confusion_matrix_percent": [
+      [
+        81.13,
+        18.87
+      ],
+      [
+        6.45,
+        93.55
+      ]
+    ],
+    "tn": 129,
+    "fp": 30,
+    "fn": 18,
+    "tp": 261
+  }
+}

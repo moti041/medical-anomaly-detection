@@ -1,0 +1,39 @@
+{
+  "run_id": "20260514T143009Z_b241f2cc",
+  "experiment_name": "ae_full_spectrum_kaggle",
+  "config_filename": "ae_full_spectrum_kaggle.yaml",
+  "config_path": "configs\\ae_full_spectrum_kaggle.yaml",
+  "spectral_mode": "full_spectrum",
+  "cutoff_ratio": 0.4,
+  "image_size": 400,
+  "batch_size": 32,
+  "epochs": 11,
+  "learning_rate": 0.01,
+  "latent_dim": 128,
+  "activation": "leaky_relu",
+  "leaky_relu_slope": 0.1,
+  "gmm_k_range": [
+    1,
+    6
+  ],
+  "gmm_selection_method": "elbow",
+  "threshold_percentile": 85.0,
+  "score_alpha": 0.5,
+  "reconstruction_loss": "energy_normalized_mse",
+  "reconstruction_target": "fft_only",
+  "use_pca": false,
+  "pca_n_components": 0.8,
+  "test_subset": "bacteria_only",
+  "timestamp": "2026-05-17T13:57:06.242111+00:00",
+  "git_commit_hash": null,
+  "best_K": 4,
+  "min_bic_K": 1,
+  "elbow_K": 3,
+  "threshold": 0.3633788434354912,
+  "score_normalization": {
+    "gmm_score_min": -525.3057857456583,
+    "gmm_score_max": -434.6389749105485,
+    "reconstruction_error_min": 0.05057479441165924,
+    "reconstruction_error_max": 0.07440769672393799
+  }
+}
