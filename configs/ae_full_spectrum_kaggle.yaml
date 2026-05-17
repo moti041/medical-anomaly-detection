@@ -1,44 +1,65 @@
 # trkr: Human-readable name shown in the tracker UI for comparing runs.
 experiment_name: ae_full_spectrum_kaggle
 
+# trkr: spectral_mode options: full_spectrum | high_freq.
 # trkr: full_spectrum uses log(1 + abs(FFT2(image))) with all frequencies kept.
 spectral_mode: full_spectrum
 
 # trkr: Input image and spectrum resolution; keep identical across benchmark configs.
-image_size: 128
+image_size: 400
 
 # trkr: Mini-batch size for autoencoder training and latent extraction.
 batch_size: 32
 
 # trkr: Maximum training epochs; early stopping may finish sooner.
-epochs: 20
+epochs: 11
 
 # trkr: Adam optimizer learning rate.
-learning_rate: 0.001
+learning_rate: 0.01
 
 # trkr: Size of the autoencoder latent vector used by the downstream GMM.
 latent_dim: 128
 
+# trkr: activation options: relu | leaky_relu.
+activation: leaky_relu
+
+# trkr: Negative slope used only when activation is leaky_relu.
+leaky_relu_slope: 0.1
+
 # trkr: Inclusive K range for GMM selection.
 gmm_k_range: [1, 6]
 
-# trkr: Select best_K by elbow on the BIC curve; use bic to force minimal BIC.
+# trkr: gmm_selection_method options: elbow | bic.
+# trkr: elbow chooses diminishing-return point on BIC curve; bic chooses minimum BIC.
 gmm_selection_method: elbow
 
 # trkr: Validation NORMAL percentile used as anomaly threshold.
-threshold_percentile: 98
+threshold_percentile: 85
 
 # trkr: Weight for normalized GMM score in final anomaly score.
-score_alpha: 0.8
+score_alpha: 0.5
 
-# trkr: AE reconstruction objective and evaluation reconstruction score.
+# trkr: reconstruction_loss options: energy_normalized_mse | mse.
+# trkr: same option is used in training loss and evaluation reconstruction score.
 reconstruction_loss: energy_normalized_mse
 
-# trkr: Reconstruct only the FFT spectrum channel; channel 0 image is context, channel 1 FFT is target.
+# trkr: reconstruction_target options:  | all_channels.
+# trkr: fft_only reconstructs only channel 1 (FFT), all_channels reconstructs both channels.
 reconstruction_target: fft_only
 
-# trkr: High-pass cutoff for high_freq mode; logged here even though full_spectrum ignores it.
-high_freq_cutoff_ratio: 0.25
+# trkr: use_pca options: true | false.
+# trkr: true => AE -> z -> scaler -> PCA -> GMM, false => AE -> z -> scaler -> GMM.
+use_pca: false
+# trkr: pca_n_components options:
+# trkr: float in (0,1] -> explained variance ratio to keep (e.g., 0.95),
+# trkr: int >= 1 -> fixed number of PCA components.
+pca_n_components: 0.8
+
+# trkr: test_subset options: all_pneumonia |  | .virus_only
+test_subset: bacteria_only
+
+# trkr: Normalized radial cutoff; frequencies with radius <= this value are removed.
+high_freq_cutoff_ratio: 0.4
 
 # trkr: Dataset root for the Kaggle copy downloaded next to the original data.
 data_dir: data/chest_xray_kaggle
