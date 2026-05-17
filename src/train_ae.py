@@ -26,6 +26,8 @@ DEFAULT_CONFIG = {
     'epochs': 20,
     'learning_rate': 0.001,
     'latent_dim': 128,
+    'activation': 'leaky_relu',
+    'leaky_relu_slope': 0.1,
     'gmm_k_range': [1, 6],
     'threshold_percentile': 95,
     'score_alpha': 1.0,
@@ -93,7 +95,12 @@ def main():
     )
     train_loader = DataLoader(train_dataset, batch_size=int(config['batch_size']), shuffle=True)
 
-    model = Autoencoder(latent_dim=int(config['latent_dim']), image_size=int(config['image_size']))
+    model = Autoencoder(
+        latent_dim=int(config['latent_dim']),
+        image_size=int(config['image_size']),
+        activation=config['activation'],
+        leaky_relu_slope=float(config['leaky_relu_slope']),
+    )
     optimizer = torch.optim.Adam(model.parameters(), lr=float(config['learning_rate']))
     reconstruction_loss_mode = config.get('reconstruction_loss', 'mse')
     reconstruction_target = config.get('reconstruction_target', 'all_channels')
@@ -147,6 +154,8 @@ def main():
         'final_train_loss': float(final_loss),
         'epochs_ran': int(epochs_ran),
         'total_train_samples': len(train_dataset),
+        'activation': config['activation'],
+        'leaky_relu_slope': float(config['leaky_relu_slope']),
         'reconstruction_loss': reconstruction_loss_mode,
         'reconstruction_target': reconstruction_target,
     }

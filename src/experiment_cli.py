@@ -63,13 +63,16 @@ def list_runs():
             print("No runs recorded yet.")
             return
         
-        print(f"\n{'Run ID':<15} {'Experiment':<35} {'Timestamp':<20} {'Tags':<30}")
-        print("-" * 100)
+        print(f"\n{'Run ID':<15} {'Experiment':<35} {'Activation':<14} {'Slope':<8} {'Timestamp':<20} {'Tags':<30}")
+        print("-" * 125)
         for run in runs:
             tags = ", ".join(run.get("tags", []))
+            params = run.get("parameters", {})
             print(
                 f"{run['run_id']:<15} "
                 f"{run['experiment_name']:<35} "
+                f"{params.get('activation', ''):<14} "
+                f"{str(params.get('leaky_relu_slope', '')):<8} "
                 f"{run['timestamp']:<20} "
                 f"{tags:<30}"
             )

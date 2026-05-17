@@ -7,6 +7,7 @@ import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from sklearn.decomposition import PCA
 from sklearn.metrics import (
     auc,
     confusion_matrix,
@@ -191,6 +192,92 @@ def save_score_histogram(normal_scores, pneumonia_scores, threshold, plot_path):
     plt.close()
 
 
+def save_pca_explained_variance(pca, plot_path):
+    cumulative = np.cumsum(pca.explained_variance_ratio_)
+    components = np.arange(1, len(cumulative) + 1)
+    plt.figure(figsize=(8, 5))
+    plt.plot(components, cumulative, marker='o')
+    plt.axhline(0.95, color='red', linestyle='--', label='95% variance')
+    plt.xlabel('Number of PCA Components')
+    plt.ylabel('Cumulative Explained Variance Ratio')
+    plt.title('PCA Explained Variance')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(plot_path)
+    plt.close()
+
+
+def compute_binary_metrics(labels, scores, threshold, include_predictions=False):
+    predictions = (scores > threshold).astype(int)
+    roc_auc = roc_auc_score(labels, scores)
+    precision_vals, recall_vals, _ = precision_recall_curve(labels, scores)
+    pr_auc = auc(recall_vals, precision_vals)
+    cm = confusion_matrix(labels, predictions, labels=[0, 1])
+    precision = precision_score(labels, predictions, zero_division=0)
+    recall = recall_score(labels, predictions, zero_division=0)
+    f1 = f1_score(labels, predictions, zero_division=0)
+    tn, fp, fn, tp = cm.ravel()
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+    row_sums = cm.sum(axis=1, keepdims=True)
+    cm_percent = np.divide(
+        cm,
+        row_sums,
+        out=np.zeros_like(cm, dtype=np.float64),
+        where=row_sums != 0,
+    ) * 100.0
+    result = {
+        'roc_auc': float(roc_auc),
+        'pr_auc': float(pr_auc),
+        'precision': float(precision),
+        'recall': float(recall),
+        'f1': float(f1),
+        'specificity': float(specificity),
+        'confusion_matrix': cm.tolist(),
+        'confusion_matrix_percent': np.round(cm_percent, 2).tolist(),
+        'tn': int(tn),
+        'fp': int(fp),
+        'fn': int(fn),
+        'tp': int(tp),
+    }
+    if include_predictions:
+        result['predictions'] = predictions
+    return result
+
+
+def compute_latent_statistics(latents):
+    if latents.shape[0] == 0:
+        return {}
+
+    latents = np.asarray(latents, dtype=np.float64)
+    feature_mean = np.mean(latents, axis=0)
+    feature_std = np.std(latents, axis=0)
+    feature_variance = np.var(latents, axis=0)
+    covariance_condition_number = None
+
+    if latents.shape[0] > 1 and latents.shape[1] > 0:
+        covariance = np.atleast_2d(np.cov(latents, rowvar=False))
+        condition_number = float(np.linalg.cond(covariance + np.eye(covariance.shape[0]) * 1e-12))
+        covariance_condition_number = condition_number if np.isfinite(condition_number) else None
+
+    return {
+        'sample_count': int(latents.shape[0]),
+        'feature_count': int(latents.shape[1]),
+        'feature_mean': feature_mean.tolist(),
+        'feature_std': feature_std.tolist(),
+        'overall_mean': float(np.mean(latents)),
+        'overall_std': float(np.std(latents)),
+        'covariance_condition_number': covariance_condition_number,
+        'variance': {
+            'min': float(np.min(feature_variance)),
+            'max': float(np.max(feature_variance)),
+            'mean': float(np.mean(feature_variance)),
+            'std': float(np.std(feature_variance)),
+            'median': float(np.median(feature_variance)),
+        },
+    }
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate anomaly detection using GMM on AE latent vectors')
     parser.add_argument('--config', type=str, required=True, help='Path to YAML experiment config')
@@ -242,7 +329,12 @@ def main():
     params = experiment_params(config, run_id)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = Autoencoder(latent_dim=int(config['latent_dim']), image_size=int(config['image_size']))
+    model = Autoencoder(
+        latent_dim=int(config['latent_dim']),
+        image_size=int(config['image_size']),
+        activation=config['activation'],
+        leaky_relu_slope=float(config['leaky_relu_slope']),
+    )
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.to(device)
     model.eval()
@@ -267,15 +359,39 @@ def main():
     if z_train.shape[0] == 0:
         print('Error: failed to extract latent vectors from training data')
         return
+    latent_statistics = {
+        'activation': config['activation'],
+        'leaky_relu_slope': float(config['leaky_relu_slope']),
+        'train_raw': compute_latent_statistics(z_train),
+    }
 
     scaler = StandardScaler()
     z_train_scaled = scaler.fit_transform(z_train).astype(np.float64)
 
+    use_pca = bool(config.get('use_pca', False))
+    pca_n_components = config.get('pca_n_components', 0.95)
+    pca_model = None
+    actual_pca_components = None
+    explained_variance_ratio_sum = None
+    z_train_final = z_train_scaled
+    if use_pca:
+        pca_model = PCA(n_components=pca_n_components, svd_solver='full', random_state=42)
+        z_train_final = pca_model.fit_transform(z_train_scaled)
+        actual_pca_components = int(pca_model.n_components_)
+        explained_variance_ratio_sum = float(np.sum(pca_model.explained_variance_ratio_))
+        save_pca_explained_variance(pca_model, run_dir / 'pca_explained_variance.png')
+        print(
+            f'PCA enabled: n_components setting={pca_n_components}, '
+            f'actual components={actual_pca_components}, '
+            f'explained variance sum={explained_variance_ratio_sum:.4f}'
+        )
+    latent_statistics['train_gmm_input'] = compute_latent_statistics(z_train_final)
+
     model_selection = []
     min_k, max_k = [int(value) for value in config['gmm_k_range']]
     for k in range(min_k, max_k + 1):
-        if k > z_train_scaled.shape[0]:
-            print(f'Skipping K={k} because it exceeds number of training samples ({z_train_scaled.shape[0]})')
+        if k > z_train_final.shape[0]:
+            print(f'Skipping K={k} because it exceeds number of training samples ({z_train_final.shape[0]})')
             break
 
         candidate = GaussianMixture(
@@ -287,15 +403,15 @@ def main():
             tol=1e-3,
         )
         try:
-            candidate.fit(z_train_scaled)
+            candidate.fit(z_train_final)
         except ValueError as exc:
             print(f'Warning: skipped K={k} due to GMM fit failure: {exc}')
             continue
 
         model_selection.append({
             'K': k,
-            'BIC': float(candidate.bic(z_train_scaled)),
-            'AIC': float(candidate.aic(z_train_scaled)),
+            'BIC': float(candidate.bic(z_train_final)),
+            'AIC': float(candidate.aic(z_train_final)),
         })
         print(f'K={k}: BIC={model_selection[-1]["BIC"]:.1f}, AIC={model_selection[-1]["AIC"]:.1f}')
 
@@ -305,11 +421,11 @@ def main():
 
     min_bic_k = int(min(model_selection, key=lambda row: row['BIC'])['K'])
     elbow_k = select_elbow_k(model_selection, score_key='BIC')
-    selection_method = config.get('gmm_selection_method', 'bic')
+    selection_method = config.get('gmm_selection_method', 'elbow')
     # BIC balances likelihood against model complexity. The optional elbow mode
     # still uses the BIC curve, but chooses the diminishing-return point instead
     # of the absolute minimum.
-    best_k = elbow_k if selection_method == 'elbow' else min_bic_k
+    best_k = elbow_k+1 if selection_method == 'elbow' else min_bic_k
     params['best_K'] = best_k
     params['min_bic_K'] = min_bic_k
     params['elbow_K'] = elbow_k
@@ -333,7 +449,7 @@ def main():
         n_init=3,
         tol=1e-3,
     )
-    gmm.fit(z_train_scaled)
+    gmm.fit(z_train_final)
     score_alpha = float(config.get('score_alpha', 1.0))
     reconstruction_loss_mode = config.get('reconstruction_loss', 'mse')
     reconstruction_target = config.get('reconstruction_target', 'all_channels')
@@ -341,10 +457,17 @@ def main():
         {
             'scaler': scaler,
             'gmm': gmm,
+            'pca': pca_model,
             'best_k': best_k,
+            'activation': config['activation'],
+            'leaky_relu_slope': float(config['leaky_relu_slope']),
             'score_alpha': score_alpha,
             'reconstruction_loss': reconstruction_loss_mode,
             'reconstruction_target': reconstruction_target,
+            'use_pca': use_pca,
+            'pca_n_components': pca_n_components,
+            'actual_pca_components': actual_pca_components,
+            'explained_variance_ratio_sum': explained_variance_ratio_sum,
         },
         checkpoint_dir / 'gmm_latent.joblib',
     )
@@ -361,9 +484,12 @@ def main():
     if not np.any(normal_val_mask):
         print('Error: no NORMAL samples in val/NORMAL for threshold selection')
         return
+    latent_statistics['val_raw'] = compute_latent_statistics(z_val)
 
     z_val_scaled = scaler.transform(z_val).astype(np.float64)
-    val_gmm_scores = -gmm.score_samples(z_val_scaled)
+    z_val_final = pca_model.transform(z_val_scaled) if use_pca else z_val_scaled
+    latent_statistics['val_gmm_input'] = compute_latent_statistics(z_val_final)
+    val_gmm_scores = -gmm.score_samples(z_val_final)
     val_final_scores, val_gmm_norm, val_recon_norm, score_normalization = combine_scores(
         val_gmm_scores,
         val_recon_errors,
@@ -395,8 +521,15 @@ def main():
         reconstruction_loss_mode,
         reconstruction_target,
     )
+    latent_statistics['test_raw'] = compute_latent_statistics(z_test)
     z_test_scaled = scaler.transform(z_test).astype(np.float64)
-    gmm_scores = -gmm.score_samples(z_test_scaled)
+    z_test_final = pca_model.transform(z_test_scaled) if use_pca else z_test_scaled
+    latent_statistics['test_gmm_input'] = compute_latent_statistics(z_test_final)
+    save_json(run_dir / 'latent_statistics.json', latent_statistics)
+    # Dead ReLU activations can collapse latent-feature variance and make
+    # covariance estimates poorly conditioned. GMM likelihoods use that
+    # covariance geometry, so latent-space quality affects anomaly scores.
+    gmm_scores = -gmm.score_samples(z_test_final)
     final_scores, gmm_scores_norm, recon_errors_norm, _ = combine_scores(
         gmm_scores,
         test_recon_errors,
@@ -404,31 +537,67 @@ def main():
         val_recon_errors[normal_val_mask],
         score_alpha,
     )
-    predictions = (final_scores > threshold).astype(int)
-
-    roc_auc = roc_auc_score(labels, final_scores)
-    precision_vals, recall_vals, _ = precision_recall_curve(labels, final_scores)
-    pr_auc = auc(recall_vals, precision_vals)
-    cm = confusion_matrix(labels, predictions, labels=[0, 1])
-    row_sums = cm.sum(axis=1, keepdims=True)
-    cm_percent = np.divide(
-        cm,
-        row_sums,
-        out=np.zeros_like(cm, dtype=np.float64),
-        where=row_sums != 0,
-    ) * 100.0
-    precision = precision_score(labels, predictions, zero_division=0)
-    recall = recall_score(labels, predictions, zero_division=0)
-    f1 = f1_score(labels, predictions, zero_division=0)
-    tn, fp, fn, tp = cm.ravel()
-    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
-
     normal_scores = final_scores[labels == 0]
     pneumonia_scores = final_scores[labels == 1]
     hist_path = plots_dir / 'gmm_score_hist_threshold.png'
     save_score_histogram(normal_scores, pneumonia_scores, threshold, hist_path)
 
+    test_paths = np.array(test_dataset.image_paths)
+    pneumonia_mask = labels == 1
+    normal_mask = labels == 0
+    lower_paths = np.char.lower(test_paths.astype(str))
+    virus_mask = pneumonia_mask & (np.char.find(lower_paths, 'virus') >= 0)
+    bacteria_mask = pneumonia_mask & (np.char.find(lower_paths, 'bacteria') >= 0)
+
+    def subgroup_metrics(positive_mask):
+        subset_mask = normal_mask | positive_mask
+        if np.sum(positive_mask) == 0 or np.sum(normal_mask) == 0:
+            return None
+        subset_labels = labels[subset_mask]
+        subset_scores = final_scores[subset_mask]
+        return compute_binary_metrics(subset_labels, subset_scores, threshold)
+
+    all_pneumonia_metrics = subgroup_metrics(pneumonia_mask)
+    virus_only_metrics = subgroup_metrics(virus_mask)
+    bacteria_only_metrics = subgroup_metrics(bacteria_mask)
+
+    test_subset = config.get('test_subset', 'all_pneumonia')
+    subset_mask_map = {
+        'all_pneumonia': normal_mask | pneumonia_mask,
+        'virus_only': normal_mask | virus_mask,
+        'bacteria_only': normal_mask | bacteria_mask,
+    }
+    eval_mask = subset_mask_map[test_subset]
+    if np.sum(eval_mask) == 0:
+        print(f'Error: empty evaluation subset for test_subset={test_subset}')
+        return
+    if np.sum(labels[eval_mask] == 1) == 0:
+        print(f'Error: no positive samples in evaluation subset for test_subset={test_subset}')
+        return
+
+    primary = compute_binary_metrics(labels[eval_mask], final_scores[eval_mask], threshold, include_predictions=True)
+    predictions = primary['predictions']
+    roc_auc = primary['roc_auc']
+    pr_auc = primary['pr_auc']
+    precision = primary['precision']
+    recall = primary['recall']
+    f1 = primary['f1']
+    specificity = primary['specificity']
+    cm = np.array(primary['confusion_matrix'])
+    cm_percent = np.array(primary['confusion_matrix_percent'])
+    tn = primary['tn']
+    fp = primary['fp']
+    fn = primary['fn']
+    tp = primary['tp']
+
     metrics = {
+        'activation': config['activation'],
+        'leaky_relu_slope': float(config['leaky_relu_slope']),
+        'use_pca': use_pca,
+        'pca_n_components': pca_n_components,
+        'actual_pca_components': actual_pca_components,
+        'explained_variance_ratio_sum': explained_variance_ratio_sum,
+        'test_subset': test_subset,
         'best_K': int(best_k),
         'min_bic_K': int(min_bic_k),
         'elbow_K': int(elbow_k),
@@ -453,10 +622,14 @@ def main():
         'fp': int(fp),
         'fn': int(fn),
         'tp': int(tp),
+        'all_pneumonia': all_pneumonia_metrics,
+        'virus_only': virus_only_metrics,
+        'bacteria_only': bacteria_only_metrics,
     }
     save_json(run_dir / 'params.json', params)
     save_json(run_dir / 'metrics.json', metrics)
 
+    print(f'Test subset: {test_subset}')
     print(f'ROC-AUC: {roc_auc:.4f}')
     print(f'PR-AUC: {pr_auc:.4f}')
     print(f'Confusion Matrix:\n{cm}')
@@ -477,10 +650,12 @@ def main():
             str(run_dir / 'config_snapshot.yaml'),
             str(run_dir / 'params.json'),
             str(run_dir / 'metrics.json'),
+            str(run_dir / 'latent_statistics.json'),
             str(run_dir / 'gmm_model_selection.csv'),
             str(run_dir / 'gmm_bic_aic.png'),
             str(hist_path),
             str(checkpoint_dir / 'gmm_latent.joblib'),
+            *([str(run_dir / 'pca_explained_variance.png')] if use_pca else []),
         ],
     )
 

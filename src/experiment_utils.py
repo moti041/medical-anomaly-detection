@@ -42,7 +42,7 @@ def validate_config(config):
         raise ValueError('gmm_k_range must be a two-item list, for example [1, 6]')
     if int(config['gmm_k_range'][0]) < 1 or int(config['gmm_k_range'][1]) < int(config['gmm_k_range'][0]):
         raise ValueError('gmm_k_range must be an increasing positive range')
-    config.setdefault('gmm_selection_method', 'bic')
+    config.setdefault('gmm_selection_method', 'elbow')
     if config['gmm_selection_method'] not in {'bic', 'elbow'}:
         raise ValueError("gmm_selection_method must be 'bic' or 'elbow'")
     config.setdefault('score_alpha', 1.0)
@@ -55,6 +55,29 @@ def validate_config(config):
     config.setdefault('reconstruction_target', 'all_channels')
     if config['reconstruction_target'] not in {'all_channels', 'fft_only'}:
         raise ValueError("reconstruction_target must be 'all_channels' or 'fft_only'")
+    config.setdefault('use_pca', False)
+    if not isinstance(config['use_pca'], bool):
+        raise ValueError('use_pca must be true or false')
+    config.setdefault('pca_n_components', 0.95)
+    pca_n_components = config['pca_n_components']
+    if isinstance(pca_n_components, float):
+        if not 0 < pca_n_components <= 1:
+            raise ValueError('pca_n_components float must be in (0, 1]')
+    elif isinstance(pca_n_components, int):
+        if pca_n_components < 1:
+            raise ValueError('pca_n_components int must be >= 1')
+    else:
+        raise ValueError('pca_n_components must be float or int')
+    config.setdefault('test_subset', 'all_pneumonia')
+    if config['test_subset'] not in {'all_pneumonia', 'virus_only', 'bacteria_only'}:
+        raise ValueError("test_subset must be 'all_pneumonia', 'virus_only', or 'bacteria_only'")
+    config.setdefault('activation', 'relu')
+    config['activation'] = str(config['activation']).lower()
+    if config['activation'] not in {'relu', 'leaky_relu'}:
+        raise ValueError("activation must be 'relu' or 'leaky_relu'")
+    config.setdefault('leaky_relu_slope', 0.1)
+    if float(config['leaky_relu_slope']) < 0:
+        raise ValueError('leaky_relu_slope must be non-negative')
     cutoff = float(config['high_freq_cutoff_ratio'])
     if not 0 <= cutoff <= 1:
         raise ValueError('high_freq_cutoff_ratio must be between 0 and 1')
@@ -121,12 +144,17 @@ def experiment_params(config, run_id, git_commit_hash=None):
         'epochs': int(config['epochs']),
         'learning_rate': float(config['learning_rate']),
         'latent_dim': int(config['latent_dim']),
+        'activation': config.get('activation', 'relu'),
+        'leaky_relu_slope': float(config.get('leaky_relu_slope', 0.1)),
         'gmm_k_range': config['gmm_k_range'],
-        'gmm_selection_method': config.get('gmm_selection_method', 'bic'),
+        'gmm_selection_method': config.get('gmm_selection_method', 'elbow'),
         'threshold_percentile': float(config['threshold_percentile']),
         'score_alpha': float(config.get('score_alpha', 1.0)),
         'reconstruction_loss': config.get('reconstruction_loss', 'mse'),
         'reconstruction_target': config.get('reconstruction_target', 'all_channels'),
+        'use_pca': bool(config.get('use_pca', False)),
+        'pca_n_components': config.get('pca_n_components', 0.95),
+        'test_subset': config.get('test_subset', 'all_pneumonia'),
         'timestamp': utc_timestamp(),
         'git_commit_hash': git_commit_hash or get_git_commit_hash(),
     }
@@ -163,6 +191,9 @@ def resolve_run_dir(config_path, outputs_base='outputs'):
             'gmm_selection_method',
             'threshold_percentile',
             'score_alpha',
+            'use_pca',
+            'pca_n_components',
+            'test_subset',
         }
         comparable_keys = [key for key in current_config.keys() if key not in evaluation_only_keys]
         if any(data.get(key) != current_config.get(key) for key in comparable_keys):
